@@ -158,3 +158,4 @@ MonoBehaviour:
   separationWeight: 2
   cohesionWeight: 1
   playerWeight: 3
+  awarenessRadius: 15

@@ -5,9 +5,12 @@ using System.Collections.Generic;
 [RequireComponent(typeof(CharacterController))]
 public class SwarmAgent : MonoBehaviour
 {
-    [SerializeField] private float speed = 5f;
+    [Header("Attributes")]
+
+    [SerializeField] private float speed;
     [SerializeField] private float detectionRadius = 10;
     [SerializeField] private float separationDistance = 2f;
+    [SerializeField] private float awarenessRadius = 25f;
 
     [Header("Weights")]
 
@@ -17,33 +20,86 @@ public class SwarmAgent : MonoBehaviour
 
     private Transform player;
     private CharacterController controller;
+    private Vector3 currentVelocity;
+    private bool isAggro = false;
+
+    private enum MoveStyle {Direct, FlankLeft, FlankRight}
+    private MoveStyle moveStyle;
     
     void Start()
     {
         player = GameObject.FindGameObjectWithTag("Player").transform;
         controller = GetComponent<CharacterController>();
+        speed = Random.Range(2f, 6f);
+
+        if(speed > 4f) moveStyle = MoveStyle.Direct;
+        else moveStyle = (Random.value > 0.5f) ? MoveStyle.FlankLeft : MoveStyle.FlankRight;
+        
     }
 
     
     void Update()
     {
-        if(player == null) return;
+    
+        if (player == null)
+        {
+            var p = GameObject.FindGameObjectWithTag("Player");
+            if (p == null) return;
+            player = p.transform;
+        }
 
+        float dist = Vector3.Distance(transform.position, player.position);
+
+        if (!isAggro && dist <= awarenessRadius) isAggro = true;
+        if (!isAggro) return;
+
+    
         Vector3 separation = GetSeparation();
         Vector3 cohesion = GetCohesion();
-        Vector3 playerChase = (player.position - transform.position).normalized;
 
-        Vector3 moveDirection = 
+    
+        Vector3 toPlayer = (player.position - transform.position).normalized;
+        Vector3 playerRight = player.right;
+
+   
+        float angle = Vector3.SignedAngle(player.forward, (transform.position - player.position).normalized, Vector3.up);
+
+        Vector3 flankDir = toPlayer;
+
+    
+        if (Mathf.Abs(angle) >= 20f)
+        {
+            float flankStrength = Mathf.Clamp01(Mathf.Abs(angle) / 90f);
+            flankDir += (angle > 0 ? playerRight : -playerRight) * flankStrength * 0.8f;
+        }
+
+    
+        Vector3 noise = new Vector3(
+            Mathf.PerlinNoise(Time.time * 1.5f + transform.GetInstanceID(), transform.position.x) - 0.5f,
+            0,
+            Mathf.PerlinNoise(Time.time * 1.5f + transform.GetInstanceID(), transform.position.z) - 0.5f
+        ) * 0.5f;
+
+    
+        flankDir += noise;
+        flankDir.Normalize();
+
+    
+        Vector3 moveDirection =
             (separation * separationWeight) +
             (cohesion * cohesionWeight) +
-            (playerChase * playerWeight);
+            (flankDir * playerWeight);
 
-        controller.SimpleMove(moveDirection.normalized * speed);
+            Vector3 desiredDir = (moveDirection.sqrMagnitude > 0.0001f) ? moveDirection.normalized : transform.forward;
 
+            currentVelocity = Vector3.Lerp(currentVelocity, desiredDir * speed, Time.deltaTime * 3f);
+            controller.SimpleMove(currentVelocity);
 
-        if(moveDirection.sqrMagnitude > 0.01f)
-            transform.forward = moveDirection.normalized;
+        if (currentVelocity.sqrMagnitude > 0.01f)
+            transform.forward = Vector3.Lerp(transform.forward, currentVelocity.normalized, Time.deltaTime * 10f);
+
     }
+
 
     Vector3 GetSeparation()
     {
