@@ -18,6 +18,11 @@ public class SwarmAgent : MonoBehaviour
     [SerializeField] private float cohesionWeight = 1f;
     [SerializeField] private float playerWeight = 3f;
 
+    [Header("Attack Settings")]
+    [SerializeField] private float attackRange = 2f;
+    [SerializeField] private float attackCooldown = 1.5f;
+
+    private float lastAttackTime = 0f;
     private Transform player;
     private CharacterController controller;
     private Vector3 currentVelocity;
@@ -93,15 +98,30 @@ public class SwarmAgent : MonoBehaviour
             Vector3 desiredDir = (moveDirection.sqrMagnitude > 0.0001f) ? moveDirection.normalized : transform.forward;
 
             currentVelocity = Vector3.Lerp(currentVelocity, desiredDir * speed, Time.deltaTime * 3f);
-            controller.SimpleMove(currentVelocity);
 
-        if (currentVelocity.sqrMagnitude > 0.01f)
-            transform.forward = Vector3.Lerp(transform.forward, currentVelocity.normalized, Time.deltaTime * 10f);
+            if(dist <= attackRange)
+            {
+                currentVelocity = Vector3.zero;
+            }
+            else
+            {
+                controller.SimpleMove(currentVelocity);
+            }
+        
+        Vector3 flatForward = new Vector3(currentVelocity.x, 0, currentVelocity.z);        
+        if (flatForward.sqrMagnitude > 0.01f)
+            transform.forward = Vector3.Lerp(transform.forward, flatForward.normalized, Time.deltaTime * 10f);
+
+        if(dist <= attackRange && Time.time - lastAttackTime >= attackCooldown)
+        {
+            lastAttackTime = Time.time;
+            AttackPlayer();
+        }
 
     }
 
 
-    Vector3 GetSeparation()
+    public Vector3 GetSeparation()
     {
         Vector3 force = Vector3.zero;
         Collider[] neighbors = Physics.OverlapSphere(transform.position, separationDistance);
@@ -117,7 +137,7 @@ public class SwarmAgent : MonoBehaviour
         return force.normalized;
     }
 
-    Vector3 GetCohesion()
+    public Vector3 GetCohesion()
     {
         Vector3 center = Vector3.zero;
         int count = 0;
@@ -137,4 +157,10 @@ public class SwarmAgent : MonoBehaviour
         center /= count;
         return(center - transform.position).normalized;
     }
+
+    public void AttackPlayer()
+    {
+        Debug.Log($"{name} atacou o player!");
+    }
+
 }
